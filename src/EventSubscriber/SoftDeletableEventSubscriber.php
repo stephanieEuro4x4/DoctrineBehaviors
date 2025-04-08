@@ -4,13 +4,20 @@ declare(strict_types=1);
 
 namespace Knp\DoctrineBehaviors\EventSubscriber;
 
-use Doctrine\Bundle\DoctrineBundle\EventSubscriber\EventSubscriberInterface;
+use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
 use Doctrine\ORM\Event\LoadClassMetadataEventArgs;
 use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Events;
+use Doctrine\ORM\Mapping\MappingException;
 use Knp\DoctrineBehaviors\Contract\Entity\SoftDeletableInterface;
 
-final class SoftDeletableEventSubscriber implements EventSubscriberInterface
+/**
+ * Class SoftDeletableEventSubscriber.
+ *
+ * */
+#[AsDoctrineListener(event: Events::loadClassMetadata)]
+#[AsDoctrineListener(event: Events::onFlush)]
+final class SoftDeletableEventSubscriber
 {
     /**
      * @var string
@@ -23,7 +30,7 @@ final class SoftDeletableEventSubscriber implements EventSubscriberInterface
         $unitOfWork = $entityManager->getUnitOfWork();
 
         foreach ($unitOfWork->getScheduledEntityDeletions() as $entity) {
-            if (! $entity instanceof SoftDeletableInterface) {
+            if (!$entity instanceof SoftDeletableInterface) {
                 continue;
             }
 
@@ -39,15 +46,18 @@ final class SoftDeletableEventSubscriber implements EventSubscriberInterface
         }
     }
 
+    /**
+     * @throws MappingException
+     */
     public function loadClassMetadata(LoadClassMetadataEventArgs $loadClassMetadataEventArgs): void
     {
         $classMetadata = $loadClassMetadataEventArgs->getClassMetadata();
-        if ($classMetadata->reflClass === null) {
+        if (null === $classMetadata->reflClass) {
             // Class has not yet been fully built, ignore this event
             return;
         }
 
-        if (! is_a($classMetadata->reflClass->getName(), SoftDeletableInterface::class, true)) {
+        if (!is_a($classMetadata->reflClass->getName(), SoftDeletableInterface::class, true)) {
             return;
         }
 
@@ -60,13 +70,5 @@ final class SoftDeletableEventSubscriber implements EventSubscriberInterface
             'type' => 'datetime',
             'nullable' => true,
         ]);
-    }
-
-    /**
-     * @return string[]
-     */
-    public function getSubscribedEvents(): array
-    {
-        return [Events::onFlush, Events::loadClassMetadata];
     }
 }

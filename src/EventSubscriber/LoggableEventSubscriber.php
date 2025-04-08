@@ -4,46 +4,74 @@ declare(strict_types=1);
 
 namespace Knp\DoctrineBehaviors\EventSubscriber;
 
-use Doctrine\Bundle\DoctrineBundle\EventSubscriber\EventSubscriberInterface;
-use Doctrine\ORM\Event\LifecycleEventArgs;
+use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
+use Doctrine\ORM\Event\PostPersistEventArgs;
+use Doctrine\ORM\Event\PostUpdateEventArgs;
+use Doctrine\ORM\Event\PreRemoveEventArgs;
 use Doctrine\ORM\Events;
+use Doctrine\Persistence\Event\LifecycleEventArgs;
 use Knp\DoctrineBehaviors\Contract\Entity\LoggableInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 
-final class LoggableEventSubscriber implements EventSubscriberInterface
+/**
+ * Class LoggableEventSubscriber
+ *
+ * */
+#[AsDoctrineListener(event: Events::prePersist)]
+#[AsDoctrineListener(event: Events::preUpdate)]
+#[AsDoctrineListener(event: Events::preRemove)]
+final class LoggableEventSubscriber
 {
+    /**
+     * @param LoggerInterface $logger
+     */
     public function __construct(
-        private LoggerInterface $logger
+        private LoggerInterface $logger,
     ) {
     }
 
-    public function postPersist(LifecycleEventArgs $lifecycleEventArgs): void
+    /**
+     * @param PostPersistEventArgs $postPersistEventArgs
+     *
+     * @return void
+     */
+    public function postPersist(PostPersistEventArgs $postPersistEventArgs): void
     {
-        $entity = $lifecycleEventArgs->getEntity();
-        if (! $entity instanceof LoggableInterface) {
+        $entity = $postPersistEventArgs->getObject();
+        if (!$entity instanceof LoggableInterface) {
             return;
         }
 
         $createLogMessage = $entity->getCreateLogMessage();
         $this->logger->log(LogLevel::INFO, $createLogMessage);
 
-        $this->logChangeSet($lifecycleEventArgs);
+        $this->logChangeSet($postPersistEventArgs);
     }
 
-    public function postUpdate(LifecycleEventArgs $lifecycleEventArgs): void
+    /**
+     * @param PostUpdateEventArgs $postUpdateEventArgs
+     *
+     * @return void
+     */
+    public function postUpdate(PostUpdateEventArgs $postUpdateEventArgs): void
     {
-        $entity = $lifecycleEventArgs->getEntity();
-        if (! $entity instanceof LoggableInterface) {
+        $entity = $postUpdateEventArgs->getObject();
+        if (!$entity instanceof LoggableInterface) {
             return;
         }
 
-        $this->logChangeSet($lifecycleEventArgs);
+        $this->logChangeSet($postUpdateEventArgs);
     }
 
-    public function preRemove(LifecycleEventArgs $lifecycleEventArgs): void
+    /**
+     * @param PreRemoveEventArgs $preRemoveEventArgs
+     *
+     * @return void
+     */
+    public function preRemove(PreRemoveEventArgs $preRemoveEventArgs): void
     {
-        $entity = $lifecycleEventArgs->getEntity();
+        $entity = $preRemoveEventArgs->getObject();
 
         if ($entity instanceof LoggableInterface) {
             $this->logger->log(LogLevel::INFO, $entity->getRemoveLogMessage());
@@ -51,32 +79,24 @@ final class LoggableEventSubscriber implements EventSubscriberInterface
     }
 
     /**
-     * @return string[]
-     */
-    public function getSubscribedEvents(): array
-    {
-        return [Events::postPersist, Events::postUpdate, Events::preRemove];
-    }
-
-    /**
-     * Logs entity changeset
+     * Logs entity changeset.
      */
     private function logChangeSet(LifecycleEventArgs $lifecycleEventArgs): void
     {
-        $entityManager = $lifecycleEventArgs->getEntityManager();
+        $entityManager = $lifecycleEventArgs->getObjectManager();
         $unitOfWork = $entityManager->getUnitOfWork();
-        $entity = $lifecycleEventArgs->getEntity();
+        $entity = $lifecycleEventArgs->getObject();
 
         $entityClass = $entity::class;
         $classMetadata = $entityManager->getClassMetadata($entityClass);
 
-        /** @var LoggableInterface $entity */
+        /* @var LoggableInterface $entity */
         $unitOfWork->computeChangeSet($classMetadata, $entity);
         $changeSet = $unitOfWork->getEntityChangeSet($entity);
 
         $message = $entity->getUpdateLogMessage($changeSet);
 
-        if ($message === '') {
+        if ('' === $message) {
             return;
         }
 

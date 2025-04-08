@@ -4,23 +4,29 @@ declare(strict_types=1);
 
 namespace Knp\DoctrineBehaviors\EventSubscriber;
 
-use Doctrine\Bundle\DoctrineBundle\EventSubscriber\EventSubscriberInterface;
-use Doctrine\ORM\Event\LifecycleEventArgs;
+use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
 use Doctrine\ORM\Event\LoadClassMetadataEventArgs;
+use Doctrine\ORM\Event\PrePersistEventArgs;
 use Doctrine\ORM\Events;
+use Doctrine\ORM\Mapping\MappingException;
 use Knp\DoctrineBehaviors\Contract\Entity\UuidableInterface;
 
-final class UuidableEventSubscriber implements EventSubscriberInterface
+#[AsDoctrineListener(event: Events::loadClassMetadata)]
+#[AsDoctrineListener(event: Events::prePersist)]
+final class UuidableEventSubscriber
 {
+    /**
+     * @throws MappingException
+     */
     public function loadClassMetadata(LoadClassMetadataEventArgs $loadClassMetadataEventArgs): void
     {
         $classMetadata = $loadClassMetadataEventArgs->getClassMetadata();
-        if ($classMetadata->reflClass === null) {
+        if (null === $classMetadata->reflClass) {
             // Class has not yet been fully built, ignore this event
             return;
         }
 
-        if (! is_a($classMetadata->reflClass->getName(), UuidableInterface::class, true)) {
+        if (!is_a($classMetadata->reflClass->getName(), UuidableInterface::class, true)) {
             return;
         }
 
@@ -35,21 +41,13 @@ final class UuidableEventSubscriber implements EventSubscriberInterface
         ]);
     }
 
-    public function prePersist(LifecycleEventArgs $lifecycleEventArgs): void
+    public function prePersist(PrePersistEventArgs $prePersistEventArgs): void
     {
-        $entity = $lifecycleEventArgs->getEntity();
-        if (! $entity instanceof UuidableInterface) {
+        $entity = $prePersistEventArgs->getObject();
+        if (!$entity instanceof UuidableInterface) {
             return;
         }
 
         $entity->generateUuid();
-    }
-
-    /**
-     * @return string[]
-     */
-    public function getSubscribedEvents(): array
-    {
-        return [Events::loadClassMetadata, Events::prePersist];
     }
 }
